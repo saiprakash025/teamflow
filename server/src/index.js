@@ -11,6 +11,8 @@ const { requireAuth } = require('./middleware/auth');
 const projectsRouter = require('./routes/projects');
 const tasksRouter = require('./routes/tasks');
 
+const notificationsRouter = require('./routes/notifications');
+
 const app = express();
 
 connectDB();
@@ -37,6 +39,7 @@ const PORT = process.env.PORT || 5000;
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/tasks', tasksRouter);
+app.use('/api/notifications', notificationsRouter);
 
 
 app.listen(PORT, () => {
