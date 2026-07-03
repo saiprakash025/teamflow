@@ -7,6 +7,7 @@ const cors = require('cors');
 
 const { connectDB } = require('./utils/db');
 const authRouter = require('./routes/auth');
+const { requireAuth } = require('./middleware/auth');
 
 const app = express();
 
@@ -23,6 +24,10 @@ app.use(express.json());
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/me', requireAuth, (req, res) => {
+  res.json({ user: req.user });
 });
 
 const PORT = process.env.PORT || 5000;
