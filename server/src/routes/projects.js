@@ -131,4 +131,45 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+//  update per-project membership and roles
+router.put('/:id/members', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+    const { id } = req.params;
+    const { members } = req.body; 
+
+    const project = await Project.findById(id);
+
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const isOwner = project.owner.toString() === userId;
+    const isGlobalAdmin = userRole === 'admin';
+
+    if (!isOwner && !isGlobalAdmin) {
+      return res.status(403).json({ message: 'Only owner or admin can update project members' });
+    }
+
+    if (!Array.isArray(members)) {
+      return res.status(400).json({ message: 'Members must be an array' });
+    }
+
+    // Basic validation: each entry must have user + valid role
+    const sanitizedMembers = members.map((m) => ({
+      user: m.user,
+      role: ['admin', 'member', 'viewer'].includes(m.role) ? m.role : 'member',
+    }));
+
+    project.members = sanitizedMembers;
+    await project.save();
+
+    res.json(project);
+  } catch (err) {
+    console.error('Update project members error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;
