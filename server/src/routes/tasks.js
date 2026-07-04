@@ -105,12 +105,26 @@ router.put('/:id', requireAuth, async (req, res) => {
       attachments,
       comments,
       mentions,
+      parent,
     } = req.body;
 
-    const task = await Task.findById(id);
+    const task = await Task.findById(id).populate('blockedBy', 'status');
 
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
+    }
+
+    if (status && status === 'done') {
+      const hasOpenBlocker = task.blockedBy.some(
+        (blocker) => blocker.status !== 'done'
+      );
+
+      if (hasOpenBlocker) {
+        return res.status(400).json({
+          message: 'Illegal status transition',
+          reason: 'OPEN_BLOCKERS',
+        });
+      }
     }
 
     if (title !== undefined) task.title = title;
