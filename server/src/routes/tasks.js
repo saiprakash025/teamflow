@@ -7,8 +7,30 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 
 
-async function hasCircularDependency(taskId, blockedById) {
-  return false;
+async function hasCircularDependency(taskId, newBlockedById){
+  const visited = new Set();
+
+  async function dfs(currentId) {
+    if (visited.has(currentId)) return false;
+    visited.add(currentId);
+
+    // If we reach the original task, we have a cycle
+    if (currentId.toString() === taskId.toString()) {
+      return true;
+    }
+
+    const currentTask = await Task.findById(currentId).select('blockedBy');
+    if (!currentTask) return false;
+
+    for (const blocker of currentTask.blockedBy) {
+      const result = await dfs(blocker.toString());
+      if (result) return true;
+    }
+
+    return false;
+  }
+
+  return dfs(newBlockedById.toString());
 }
 
 //  list tasks 
@@ -172,7 +194,7 @@ router.post('/:id/dependencies', requireAuth, async (req, res) => {
     const { id } = req.params;
     const { blockedBy, blocks } = req.body;
 
-    const task = await Task.findById(id);
+    const task = await Task.findById(id).populate('blockedBy', 'status title');
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -181,7 +203,8 @@ router.post('/:id/dependencies', requireAuth, async (req, res) => {
     if (blockedBy) {
       const circular = await hasCircularDependency(id, blockedBy);
       if (circular) {
-        return res.status(400).json({ message: 'Circular dependency detected' });
+        return res.status(400).json({ message: 'Circular dependency detected',
+          reason: 'CIRCULAR_DEPENDENCY' });
       }
       if (!task.blockedBy.includes(blockedBy)) {
         task.blockedBy.push(blockedBy);
@@ -197,7 +220,28 @@ router.post('/:id/dependencies', requireAuth, async (req, res) => {
 
     await task.save();
 
-    res.json(task);
+   await task.populate('blockedBy', 'status title');
+    const unresolvedBlockers = task.blockedBy.filter(
+      (blocker) => blocker.status !== 'done'
+    );
+
+    const warning =
+      unresolvedBlockers.length > 0
+        ? {
+            type: 'UNRESOLVED_BLOCKERS',
+            count: unresolvedBlockers.length,
+            blockers: unresolvedBlockers.map((b) => ({
+              id: b._id,
+              title: b.title,
+              status: b.status,
+            })),
+          }
+        : null;
+
+    res.json({
+      task,
+      warning,
+    });
   } catch (err) {
     console.error('Update dependencies error:', err);
     res.status(500).json({ message: 'Server error' });
