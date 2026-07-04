@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema(
       enum: ['admin', 'member', 'viewer'],
       default: 'member',
     },
+    emailOptOut: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
