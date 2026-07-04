@@ -11,6 +11,7 @@ const { requireAuth } = require('./middleware/auth');
 const projectsRouter = require('./routes/projects');
 const tasksRouter = require('./routes/tasks');
 const rcaRouter = require('./routes/rca');
+const analyticsRouter = require('./routes/analytics');
 
 const notificationsRouter = require('./routes/notifications');
 
@@ -42,6 +43,8 @@ app.use('/api/projects', projectsRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/rca', rcaRouter);
+app.use('/api/analytics', analyticsRouter);
+
 
 
 
