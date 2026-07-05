@@ -4,6 +4,7 @@ const Task = require('../models/Task');
 const Project = require('../models/Project');
 const ProjectTaskLink = require('../models/ProjectTaskLink');
 const { requireAuth } = require('../middleware/auth');
+const { emitNotification } = require('../events');
 
 const router = express.Router();
 
@@ -127,6 +128,15 @@ router.post('/', requireAuth, async (req, res) => {
       mentions: mentions || [],
     });
 
+    if (task.assignee) {
+  emitNotification(
+    task.assignee,
+    'task_assignment',
+    `You have been assigned to task "${task.title}"`,
+    task._id.toString()
+  );
+}
+
     res.status(201).json(task);
   } catch (err) {
     console.error('Create task error:', err);
@@ -150,6 +160,9 @@ router.put('/:id', requireAuth, async (req, res) => {
       mentions,
       parent,
     } = req.body;
+
+     const previousStatus = task.status;
+  const previousAssignee = task.assignee ? task.assignee.toString() : null;
 
     const task = await Task.findById(id).populate('blockedBy', 'status');
 
@@ -182,6 +195,32 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (parent !== undefined) task.parent = parent;
 
     await task.save();
+
+    await task.populate('assignee', 'name email');
+
+    // Status change notification
+  if (status !== undefined && status !== previousStatus) {
+    if (task.assignee) {
+      emitNotification(
+        task.assignee._id,
+        'task_status_change',
+        `Task "${task.title}" changed to status "${task.status}"`,
+        task._id.toString()
+      );
+    }
+  }
+
+  // Assignment change notification
+  const newAssignee = task.assignee ? task.assignee._id.toString() : null;
+  if (newAssignee && newAssignee !== previousAssignee) {
+    emitNotification(
+      task.assignee._id,
+      'task_assignment',
+      `You have been assigned to task "${task.title}"`,
+      task._id.toString()
+    );
+  }
+
 
     res.json(task);
   } catch (err) {

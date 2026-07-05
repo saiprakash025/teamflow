@@ -2,6 +2,7 @@
 const express = require('express');
 const Rca = require('../models/Rca');
 const { requireAuth } = require('../middleware/auth');
+const { emitNotification } = require('../events');
 
 const router = express.Router();
 
@@ -79,6 +80,8 @@ router.post('/', requireAuth, async (req, res) => {
     });
 
     res.status(201).json(rca);
+
+
   } catch (err) {
     console.error('Create RCA error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -112,7 +115,24 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
 
     if (isOwner && submit === true && rca.status === 'draft') {
+      if (!rca.reviewers || rca.reviewers.length === 0) {
+    return res.status(400).json({
+      message: 'Cannot submit RCA without reviewers',
+    });
+  }
       rca.status = 'submitted';
+      await rca.save();
+
+      for (const reviewerId of rca.reviewers) {
+        emitNotification(
+          reviewerId,
+          'rca_submitted',
+          `RCA "${rca.title}" has been submitted for review`,
+          rca._id.toString()
+        );
+      }
+
+      return res.json(rca);
     }
     if (reviewDecision && isReviewer && rca.status === 'submitted') {
       const { decision, comment } = reviewDecision;
@@ -128,13 +148,34 @@ router.put('/:id', requireAuth, async (req, res) => {
         return res.status(400).json({ message: 'Invalid decision value' });
       }
 
-      rca.reviews.push({
-        reviewer: userId,
-        decision,
-        comment,
-        decidedAt: new Date(),
-      });
+      const existingIndex = rca.reviews.findIndex(
+    (rev) => rev.reviewer.toString() === userId
+  );
+
+       if (existingIndex >= 0) {
+    // Update previous decision
+    rca.reviews[existingIndex].decision = decision;
+    rca.reviews[existingIndex].comment = comment;
+    rca.reviews[existingIndex].decidedAt = new Date();
+  } else {
+    rca.reviews.push({
+      reviewer: userId,
+      decision,
+      comment,
+      decidedAt: new Date(),
+    });
+  }
       rca.status = computeRcaStatus(rca);
+       await rca.save();
+
+      emitNotification(
+        rca.owner,
+        'rca_review_decision',
+        `Reviewer updated RCA "${rca.title}" with decision "${decision}"`,
+        rca._id.toString()
+      );
+
+      return res.json(rca);
     }
 
     await rca.save();
@@ -172,6 +213,13 @@ router.post('/:id/override', requireAuth, async (req, res) => {
     }
 
     await rca.save();
+
+    emitNotification(
+  rca.owner,
+  'rca_admin_override',
+  `Admin overrode RCA "${rca.title}" (reason: "${reason || 'Admin override'}")`,
+  rca._id.toString()
+);
 
     res.json({
       rca,
