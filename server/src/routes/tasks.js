@@ -175,15 +175,16 @@ router.put('/:id', requireAuth, async (req, res) => {
       parent,
     } = req.body;
 
-     const previousStatus = task.status;
-  const previousAssignee = task.assignee ? task.assignee.toString() : null;
-  const previousDependencies = task.dependencies.map((d) => d.toString());
 
     const task = await Task.findById(id).populate('blockedBy', 'status');
 
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
+
+    const previousStatus = task.status;
+    const previousAssignee = task.assignee ? task.assignee.toString() : null;
+    const previousBlockedBy = task.blockedBy.map((d) => d._id.toString());
 
     if (status && status === 'done') {
       const hasOpenBlocker = task.blockedBy.some(
@@ -241,25 +242,24 @@ if (newAssignee !== previousAssignee) {
 }
 
 // Dependency changes
-const newDependencies = task.dependencies.map((d) => d.toString());
-if (JSON.stringify(previousDependencies) !== JSON.stringify(newDependencies)) {
+const newBlockedBy = task.blockedBy.map((d) => d._id.toString());
+if (JSON.stringify(previousBlockedBy) !== JSON.stringify(newBlockedBy)) {
   await logActivity({
     entityType: 'task',
     entityId: task._id,
     actor: req.user.userId,
     action: 'TASK_DEPENDENCIES_UPDATED',
     payload: {
-      from: previousDependencies,
-      to: newDependencies,
+      from: previousBlockedBy,
+      to: newBlockedBy,
     },
   });
 }
 
-return res.json(task);
 
-    await task.populate('assignee', 'name email');
+  await task.populate('assignee', 'name email');
 
-    // Status change notification
+   // Status change notification
   if (status !== undefined && status !== previousStatus) {
     if (task.assignee) {
       emitNotification(
@@ -272,8 +272,8 @@ return res.json(task);
   }
 
   // Assignment change notification
-  const newAssignee = task.assignee ? task.assignee._id.toString() : null;
-  if (newAssignee && newAssignee !== previousAssignee) {
+  const newAssigneeId = task.assignee ? task.assignee._id.toString() : null;
+  if (newAssigneeId && newAssigneeId !== previousAssignee) {
     emitNotification(
       task.assignee._id,
       'task_assignment',

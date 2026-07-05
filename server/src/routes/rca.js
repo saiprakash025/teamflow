@@ -206,10 +206,8 @@ router.put('/:id', requireAuth, async (req, res) => {
   entityType: 'rca',
   entityId: rca._id,
   actor: req.user.userId,
-  action: 'RCA_REVIEW_DECISION',
+  action: 'RCA_UPDATED',
   payload: {
-    decision,
-    comment,
     statusAfter: rca.status,
   },
 });

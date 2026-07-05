@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const ActivityLog = require('../models/ActivityLog');
-const requireAuth = require('../middleware/requireAuth');
+const { requireAuth } = require('../middleware/auth');
 
 router.get('/', requireAuth, async (req, res) => {
   try {
