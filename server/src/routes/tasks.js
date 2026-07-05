@@ -5,6 +5,7 @@ const Project = require('../models/Project');
 const ProjectTaskLink = require('../models/ProjectTaskLink');
 const { requireAuth } = require('../middleware/auth');
 const { emitNotification } = require('../events');
+const { logActivity } = require('../utils/activity');
 
 const router = express.Router();
 
@@ -128,6 +129,19 @@ router.post('/', requireAuth, async (req, res) => {
       mentions: mentions || [],
     });
 
+    await logActivity({
+  entityType: 'task',
+  entityId: task._id,
+  actor: req.user.userId,
+  action: 'TASK_CREATED',
+  payload: {
+    title: task.title,
+    status: task.status,
+    assignee: task.assignee,
+    project: task.project,
+  },
+});
+
     if (task.assignee) {
   emitNotification(
     task.assignee,
@@ -163,6 +177,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 
      const previousStatus = task.status;
   const previousAssignee = task.assignee ? task.assignee.toString() : null;
+  const previousDependencies = task.dependencies.map((d) => d.toString());
 
     const task = await Task.findById(id).populate('blockedBy', 'status');
 
@@ -195,6 +210,52 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (parent !== undefined) task.parent = parent;
 
     await task.save();
+
+    // Status change
+if (status !== undefined && status !== previousStatus) {
+  await logActivity({
+    entityType: 'task',
+    entityId: task._id,
+    actor: req.user.userId,
+    action: 'TASK_STATUS_CHANGED',
+    payload: {
+      from: previousStatus,
+      to: task.status,
+    },
+  });
+}
+
+// Assignee change
+const newAssignee = task.assignee ? task.assignee.toString() : null;
+if (newAssignee !== previousAssignee) {
+  await logActivity({
+    entityType: 'task',
+    entityId: task._id,
+    actor: req.user.userId,
+    action: 'TASK_REASSIGNED',
+    payload: {
+      from: previousAssignee,
+      to: newAssignee,
+    },
+  });
+}
+
+// Dependency changes
+const newDependencies = task.dependencies.map((d) => d.toString());
+if (JSON.stringify(previousDependencies) !== JSON.stringify(newDependencies)) {
+  await logActivity({
+    entityType: 'task',
+    entityId: task._id,
+    actor: req.user.userId,
+    action: 'TASK_DEPENDENCIES_UPDATED',
+    payload: {
+      from: previousDependencies,
+      to: newDependencies,
+    },
+  });
+}
+
+return res.json(task);
 
     await task.populate('assignee', 'name email');
 

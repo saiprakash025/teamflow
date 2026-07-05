@@ -3,6 +3,7 @@ const express = require('express');
 const Rca = require('../models/Rca');
 const { requireAuth } = require('../middleware/auth');
 const { emitNotification } = require('../events');
+const { logActivity } = require('../utils/activity');
 
 const router = express.Router();
 
@@ -78,8 +79,19 @@ router.post('/', requireAuth, async (req, res) => {
       comments: [],
       attachments: []
     });
+    await logActivity({
+  entityType: 'rca',
+  entityId: rca._id,
+  actor: req.user.userId,
+  action: 'RCA_CREATED',
+  payload: {
+    task: rca.task,
+    title: rca.title,
+    status: rca.status,
+  },
+});
 
-    res.status(201).json(rca);
+return res.status(201).json(rca);
 
 
   } catch (err) {
@@ -122,6 +134,16 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
       rca.status = 'submitted';
       await rca.save();
+
+      await logActivity({
+    entityType: 'rca',
+    entityId: rca._id,
+    actor: req.user.userId,
+    action: 'RCA_SUBMITTED',
+    payload: {
+      status: rca.status,
+    },
+  });
 
       for (const reviewerId of rca.reviewers) {
         emitNotification(
@@ -180,6 +202,18 @@ router.put('/:id', requireAuth, async (req, res) => {
 
     await rca.save();
 
+    await logActivity({
+  entityType: 'rca',
+  entityId: rca._id,
+  actor: req.user.userId,
+  action: 'RCA_REVIEW_DECISION',
+  payload: {
+    decision,
+    comment,
+    statusAfter: rca.status,
+  },
+});
+
     res.json(rca);
   } catch (err) {
     console.error('Update RCA error:', err);
@@ -213,6 +247,19 @@ router.post('/:id/override', requireAuth, async (req, res) => {
     }
 
     await rca.save();
+
+    await logActivity({
+  entityType: 'rca',
+  entityId: rca._id,
+  actor: req.user.userId,
+  action: 'RCA_ADMIN_OVERRIDE',
+  payload: {
+    newReviewers: newReviewers || null,
+    forceClose: !!forceClose,
+    statusAfter: rca.status,
+    reason: reason || null,
+  },
+});
 
     emitNotification(
   rca.owner,
