@@ -13,6 +13,10 @@ sign-off, and get a live activity/reporting view of project health — all behin
 permissions (admin / member / viewer) that are enforced on the server, not just hidden in
 the UI.
 
+**Live Demo:**
+- Frontend: https://teamflow-sigma-silk.vercel.app
+- Backend : https://teamflow-gort.onrender.com
+
 ## Tech Stack
 
 **Client**
